@@ -29,6 +29,18 @@ function setupInventory(playerItems, otherItems) {
 
   
     playerItems.forEach(item => {
+      playerItems.forEach(item => {
+    
+    let slotElement = $(`#player-slots [data-slot="${item.slot}"]`);
+    if (slotElement.length > 0) {
+        slotElement.html(`
+            <div class="item" data-itemname="${item.name}">
+                <img src="img/${item.name}.png" onerror="this.src='img/default.png'">
+                <div class="item-count">${item.count}</div>
+            </div>
+        `);
+    }
+});
         let slotElement = $(`#player-slots .slot[data-slot="${item.slot}"]`);
         slotElement.html(`
             <div class="item" draggable="true" data-itemname="${item.name}">
