@@ -2,7 +2,28 @@ local userInventories = {}
 local OX = exports.oxmysql
 local MAX_WEIGHT = 100.0
 RPC.register('inventory:getPlayerData', function(source)
-    local identifier = GetPlayerIdentifiers(source)[1]
+local identifier = GetPlayerIdentifiers(source)[1]
+ RegisterServerEvent('inventory:requestPlayerData')
+AddEventHandler('inventory:requestPlayerData', function(invType, netId)
+    local src = source
+    local identifier = GetPlayerIdentifiers(src)[1]
+
+    
+    exports.oxmysql:query('SELECT * FROM user_inventory WHERE identifier = ?', {identifier}, function(playerItems)
+        local totalWeight = 0
+        for k, v in pairs(playerItems) do
+            totalWeight = totalWeight + (v.weight * v.count)
+        end
+
+        
+        TriggerClientEvent('inventory:openUI', src, {
+            action = "display",
+            playerItems = playerItems,
+            currentWeight = totalWeight,
+            otherTitle = (invType == "trunk" and "Araç Bagajı" or "Yer")
+        })
+    end)
+end)
     
    
     local items = MySQL.query.await('SELECT * FROM user_inventory WHERE identifier = ?', {identifier})
