@@ -1,47 +1,43 @@
-local userInventories = {} 
 local OX = exports.oxmysql
-local MAX_WEIGHT = 100.0
-RPC.register('inventory:getPlayerData', function(source)
-local identifier = GetPlayerIdentifiers(source)[1]
- RegisterServerEvent('inventory:requestPlayerData')
+
+
+RegisterServerEvent('inventory:requestPlayerData')
 AddEventHandler('inventory:requestPlayerData', function(invType, netId)
     local src = source
     local identifier = GetPlayerIdentifiers(src)[1]
 
     
-    exports.oxmysql:query('SELECT * FROM user_inventory WHERE identifier = ?', {identifier}, function(playerItems)
+    OX:query('SELECT item_name as name, count, slot, weight FROM user_inventory WHERE identifier = ?', {identifier}, function(playerItems)
         local totalWeight = 0
-        for k, v in pairs(playerItems) do
-            totalWeight = totalWeight + (v.weight * v.count)
+        if playerItems then
+            for _, v in pairs(playerItems) do
+                totalWeight = totalWeight + (v.weight * v.count)
+            end
         end
 
-        
-        TriggerClientEvent('inventory:openUI', src, {
-            action = "display",
-            playerItems = playerItems,
-            currentWeight = totalWeight,
-            otherTitle = (invType == "trunk" and "Araç Bagajı" or "Yer")
-        })
+       
+        if invType == "trunk" and netId ~= 0 then
+            local plate = GetVehicleNumberPlateText(NetworkGetEntityFromNetworkId(netId))
+            OX:query('SELECT item_name as name, count, slot, weight FROM trunk_inventory WHERE plate = ?', {plate}, function(otherItems)
+                TriggerClientEvent('inventory:openUI', src, {
+                    action = "display",
+                    playerItems = playerItems or {},
+                    otherItems = otherItems or {},
+                    currentWeight = totalWeight,
+                    otherTitle = "Araç Bagajı (" .. plate .. ")"
+                })
+            end)
+        else
+            
+            TriggerClientEvent('inventory:openUI', src, {
+                action = "display",
+                playerItems = playerItems or {},
+                otherItems = {},
+                currentWeight = totalWeight,
+                otherTitle = "Yer"
+            })
+        end
     end)
-end)
-    
-   
-    local items = MySQL.query.await('SELECT * FROM user_inventory WHERE identifier = ?', {identifier})
-    local weight = MySQL.scalar.await('SELECT SUM(count * weight) FROM user_inventory WHERE identifier = ?', {identifier})
-    
-    return { items = items, weight = weight or 0 }
-end)
-
-
-RegisterNetEvent('inventory:giveItem')
-AddEventHandler('inventory:giveItem', function(targetId, slotId)
-    local src = source
-    local identifier = GetPlayerIdentifiers(src)[1]
-    local targetIdentifier = GetPlayerIdentifiers(targetId)[1]
-
-
-    MySQL.update('UPDATE user_inventory SET identifier = ?, slot = (SELECT COALESCE(MAX(slot), 0) + 1 FROM user_inventory WHERE identifier = ?) WHERE identifier = ? AND slot = ?',
-    {targetIdentifier, targetIdentifier, identifier, slotId})
 end)
 
 
@@ -50,9 +46,16 @@ AddEventHandler('inventory:moveItem', function(data)
     local src = source
     local identifier = GetPlayerIdentifiers(src)[1]
     
+    
+    if data.fromInv == data.toInv and data.fromInv == "player-slots" then
+        OX:execute('UPDATE user_inventory SET slot = ? WHERE identifier = ? AND slot = ?', 
+        {data.toSlot, identifier, data.fromSlot})
+    
    
-    exports.oxmysql:execute('UPDATE user_inventory SET slot = ? WHERE identifier = ? AND slot = ?', 
-    {data.to, identifier, data.from})
+    elseif data.fromInv == "player-slots" and data.toInv == "other-slots" then
+       
+        print("Eşya çantadan dışarı çıkarıldı slot: " .. data.fromSlot)
+    end
 end)
 
 
@@ -61,9 +64,11 @@ AddEventHandler('inventory:useHotkey', function(slotId)
     local src = source
     local identifier = GetPlayerIdentifiers(src)[1]
 
-    exports.oxmysql:query('SELECT item_name FROM user_inventory WHERE identifier = ? AND slot = ?', {identifier, slotId}, function(result)
-        if result[1] then
+    OX:query('SELECT item_name, count FROM user_inventory WHERE identifier = ? AND slot = ?', {identifier, slotId}, function(result)
+        if result and result[1] and result[1].count > 0 then
             local itemName = result[1].item_name
+            
+            
             if string.find(itemName, "WEAPON_") then
                 TriggerClientEvent('inventory:toggleWeapon', src, itemName)
             else
@@ -74,67 +79,19 @@ AddEventHandler('inventory:useHotkey', function(slotId)
 end)
 
 
-RegisterNetEvent('envanter:esyaEkle')
-AddEventHandler('envanter:esyaEkle', function(itemName, count)
-    local src = source
-    local license = GetPlayerIdentifiers(src)[1]
-
-   
-    OX:execute('INSERT INTO user_inventory (identifier, item_name, count) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE count = count + ?', 
-    {license, itemName, count, count}, function(result)
-        TriggerClientEvent('chat:addMessage', src, {args = {"SİSTEM", count .. " adet " .. itemName .. " eklendi."}})
-    end)
-end)
-
-
-RegisterServerEvent('envanter:esyaKullan')
-AddEventHandler('envanter:esyaKullan', function(itemName)
-    local src = source
-    local license = GetPlayerIdentifiers(src)[1]
-
-    OX:scalar('SELECT count FROM user_inventory WHERE identifier = ? AND item_name = ?', {license, itemName}, function(count)
-        if count and count > 0 then
-            
-            OX:execute('UPDATE user_inventory SET count = count - 1 WHERE identifier = ? AND item_name = ?', {license, itemName})
-            
-          
-            TriggerClientEvent('envanter:efektTetikle', src, itemName)
-        else
-            TriggerClientEvent('chat:addMessage', src, {args = {"HATA", "Üzerinde bu eşyadan yok!"}})
-        end
-    end)
-end)
-
 RegisterNetEvent('inventory:addItem')
-AddEventHandler('inventory:addItem', function(itemName, count)
-    local src = source
-    local identifier = GetPlayerIdentifiers(src)[1] 
-
-    if not userInventories[identifier] then
-        userInventories[identifier] = {}
-    end
-
-    if userInventories[identifier][itemName] then
-        userInventories[identifier][itemName] = userInventories[identifier][itemName] + count
-    else
-        userInventories[identifier][itemName] = count
-    end
-
-    print(string.format("[Envanter] %s isimli oyuncuya %d adet %s eklendi.", GetPlayerName(src), count, itemName))
-end)
-
-
-RegisterCommand('envanter', function(source, args, rawCommand)
+AddEventHandler('inventory:addItem', function(itemName, count, weight)
     local src = source
     local identifier = GetPlayerIdentifiers(src)[1]
-    local inv = userInventories[identifier]
+    local itemWeight = weight or 1.0
 
-    if inv then
-        TriggerClientEvent('chat:addMessage', src, { args = { '^2Envanterin:' } })
-        for item, amount in pairs(inv) do
-            TriggerClientEvent('chat:addMessage', src, { args = { '- ' .. item .. ': ' .. amount } })
+    OX:scalar('SELECT SUM(count * weight) FROM user_inventory WHERE identifier = ?', {identifier}, function(currentTotal)
+        if (currentTotal or 0) + (count * itemWeight) <= 100.0 then
+          
+            OX:execute('INSERT INTO user_inventory (identifier, item_name, count, slot, weight) VALUES (?, ?, ?, (SELECT COALESCE(MAX(slot), 0) + 1 FROM user_inventory WHERE identifier = ?), ?) ON DUPLICATE KEY UPDATE count = count + ?',
+            {identifier, itemName, count, identifier, itemWeight, count})
+        else
+            TriggerClientEvent('chat:addMessage', src, {args = {"SİSTEM", "Envanterin çok ağır!"}})
         end
-    else
-        TriggerClientEvent('chat:addMessage', src, { args = { '^1Envanterin boş!' } })
-    end
-end, false)
+    end)
+end)
