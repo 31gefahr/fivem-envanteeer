@@ -1,6 +1,27 @@
 local userInventories = {} 
 local OX = exports.oxmysql
 local MAX_WEIGHT = 100.0
+RPC.register('inventory:getPlayerData', function(source)
+    local identifier = GetPlayerIdentifiers(source)[1]
+    
+   
+    local items = MySQL.query.await('SELECT * FROM user_inventory WHERE identifier = ?', {identifier})
+    local weight = MySQL.scalar.await('SELECT SUM(count * weight) FROM user_inventory WHERE identifier = ?', {identifier})
+    
+    return { items = items, weight = weight or 0 }
+end)
+
+
+RegisterNetEvent('inventory:giveItem')
+AddEventHandler('inventory:giveItem', function(targetId, slotId)
+    local src = source
+    local identifier = GetPlayerIdentifiers(src)[1]
+    local targetIdentifier = GetPlayerIdentifiers(targetId)[1]
+
+
+    MySQL.update('UPDATE user_inventory SET identifier = ?, slot = (SELECT COALESCE(MAX(slot), 0) + 1 FROM user_inventory WHERE identifier = ?) WHERE identifier = ? AND slot = ?',
+    {targetIdentifier, targetIdentifier, identifier, slotId})
+end)
 
 
 RegisterNetEvent('inventory:moveItem')
