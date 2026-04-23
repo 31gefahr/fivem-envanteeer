@@ -1,0 +1,38 @@
+<div id="inventory-container">
+    <div id="player-inv" class="inventory-box">
+        <div class="header">Oyuncu Çantası <span id="weight">0 / 100 kg</span></div>
+        <div class="slots" id="player-slots">
+            <div class="slot hotbar" data-slot="1">1</div>
+            <div class="slot hotbar" data-slot="2">2</div>
+            <div class="slot hotbar" data-slot="3">3</div>
+            <div class="slot hotbar" data-slot="4">4</div>
+            <div class="slot hotbar" data-slot="5">5</div>
+            </div>
+    </div>
+
+    <div id="controls">
+        <button onclick="giveItem()">VER</button>
+        <button onclick="useItem()">KULLAN</button>
+        <button onclick="dropItem()">YERE AT</button>
+    </div>
+
+    <div id="other-inv" class="inventory-box">
+        <div class="header" id="other-title">Yer / Araç</div>
+        <div class="slots" id="other-slots"></div>
+    </div>
+</div>
+
+<script>
+   
+    $(".slot").droppable({
+        drop: function(event, ui) {
+            let fromSlot = ui.draggable.data("slot");
+            let toSlot = $(this).data("slot");
+          
+            $.post('https://script_adi/moveItem', JSON.stringify({
+                from: fromSlot,
+                to: toSlot
+            }));
+        }
+    });
+</script>
