@@ -69,6 +69,24 @@ body {
 
 .slots::-webkit-scrollbar { width: 4px; }
 .slots::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+.slots {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    padding: 10px;
+    justify-items: center; 
+}
+
+.slot {
+    width: 75px; 
+    height: 95px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
 
 .slot {
     aspect-ratio: 1/1.2; 
