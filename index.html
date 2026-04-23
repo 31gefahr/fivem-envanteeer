@@ -1,38 +1,55 @@
-<div id="inventory-container">
-    <div id="player-inv" class="inventory-box">
-        <div class="header">Oyuncu Çantası <span id="weight">0 / 100 kg</span></div>
-        <div class="slots" id="player-slots">
-            <div class="slot hotbar" data-slot="1">1</div>
-            <div class="slot hotbar" data-slot="2">2</div>
-            <div class="slot hotbar" data-slot="3">3</div>
-            <div class="slot hotbar" data-slot="4">4</div>
-            <div class="slot hotbar" data-slot="5">5</div>
-            </div>
-    </div>
+// ui/script.js
 
-    <div id="controls">
-        <button onclick="giveItem()">VER</button>
-        <button onclick="useItem()">KULLAN</button>
-        <button onclick="dropItem()">YERE AT</button>
-    </div>
+let selectedItem = null;
 
-    <div id="other-inv" class="inventory-box">
-        <div class="header" id="other-title">Yer / Araç</div>
-        <div class="slots" id="other-slots"></div>
-    </div>
-</div>
+$(document).ready(function() {
+    // 1'den 5'e kadar zaten HTML'de var, 6'dan 40'a kadar slotları biz ekleyelim
+    for (let i = 6; i <= 40; i++) {
+        $('#player-slots').append(`<div class="slot" data-slot="${i}"></div>`);
+    }
 
-<script>
-   
+    // Sağ taraf (Araç/Yer) için 40 slot oluştur
+    for (let i = 1; i <= 40; i++) {
+        $('#other-slots').append(`<div class="slot" data-slot="${i}"></div>`);
+    }
+
+    // Sürükleme Başlatma (Draggable)
+    // Not: Eşyalar eklendiğinde bu fonksiyonu tekrar tetiklemelisin
+    setupDraggables();
+});
+
+function setupDraggables() {
+    $(".item").draggable({
+        helper: 'clone',
+        appendTo: 'body',
+        zIndex: 99999,
+        revert: 'invalid',
+        start: function(event, ui) {
+            $(this).css("opacity", "0.5");
+            selectedItem = $(this);
+        },
+        stop: function(event, ui) {
+            $(this).css("opacity", "1.0");
+        }
+    });
+
     $(".slot").droppable({
+        accept: ".item",
+        hoverClass: "slot-hover",
         drop: function(event, ui) {
-            let fromSlot = ui.draggable.data("slot");
+            let fromSlot = ui.draggable.parent().data("slot");
             let toSlot = $(this).data("slot");
-          
-            $.post('https://script_adi/moveItem', JSON.stringify({
-                from: fromSlot,
-                to: toSlot
+            let fromInv = ui.draggable.parent().parent().attr('id'); // player-slots mı other-slots mı?
+            let toInv = $(this).parent().attr('id');
+
+            // LUA tarafına detaylı bilgi gönder
+            $.post('https://envanter/moveItem', JSON.stringify({
+                fromSlot: fromSlot,
+                toSlot: toSlot,
+                fromInv: fromInv,
+                toInv: toInv,
+                item: ui.draggable.data("itemname")
             }));
         }
     });
-</script>
+}
