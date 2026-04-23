@@ -1,65 +1,105 @@
-RegisterKeyMapping('envanter', 'Envanter Arayüzünü Aç', 'keyboard', 'F2')
-RegisterKeyMapping('openinv', 'Envanteri Aç', 'keyboard', 'F2')
+local isInventoryOpen = false
 
-RegisterCommand('openinv', function()
-    local ped = PlayerPedId()
-    local veh = GetVehiclePedIsIn(ped, false)
-    local targetInv = "ground" 
 
-    if veh ~= 0 then
-        targetInv = "glovebox" 
+RegisterKeyMapping('toggleinv', 'Envanteri Aç/Kapat', 'keyboard', 'F2')
+
+RegisterCommand('toggleinv', function()
+    if not isInventoryOpen then
+        OpenInventory()
     else
-        local closeVeh = GetClosestVehicle(GetEntityCoords(ped), 3.0, 0, 71)
+        CloseInventory()
+    end
+end)
+
+function OpenInventory()
+    local ped = PlayerPedId()
+    local coords = GetEntityCoords(ped)
+    local veh = GetVehiclePedIsIn(ped, false)
+    local targetInv = "ground"
+    local netId = 0
+
+   
+    if veh ~= 0 then
+        targetInv = "glovebox"
+        netId = VehToNet(veh)
+    else
+        local closeVeh = GetClosestVehicle(coords, 3.0, 0, 71)
         if DoesEntityExist(closeVeh) then
-           
-            SetVehicleDoorOpen(closeVeh, 5, false, false)
-            targetInv = "trunk"
+            local trunkCoords = GetWorldPositionOfEntityBone(closeVeh, GetEntityBoneIndexByName(closeVeh, "boot"))
+            if #(coords - trunkCoords) < 2.0 then
+                SetVehicleDoorOpen(closeVeh, 5, false, false) 
+                targetInv = "trunk"
+                netId = VehToNet(closeVeh)
+            end
         end
     end
 
    
+    
+    TriggerServerEvent('inventory:requestPlayerData', targetInv, netId)
+    
+    isInventoryOpen = true
     SetNuiFocus(true, true)
-    SendNUIMessage({
-        action = "display",
-        type = targetInv,
-        maxWeight = 100
-    })
+end
+
+function CloseInventory()
+    isInventoryOpen = false
+    SetNuiFocus(false, false)
+    SendNUIMessage({ action = "hide" })
+    
+    
+    local ped = PlayerPedId()
+    local closeVeh = GetClosestVehicle(GetEntityCoords(ped), 3.0, 0, 71)
+    if DoesEntityExist(closeVeh) then
+        SetVehicleDoorShut(closeVeh, 5, false)
+    end
+end
+
+
+RegisterNUICallback('closeInv', function(data, cb)
+    CloseInventory()
+    cb('ok')
+end)
+
+
+RegisterNUICallback('giveItem', function(data, cb)
+    local closestPlayer, closestDistance = GetClosestPlayer()
+    if closestPlayer ~= -1 and closestDistance <= 3.0 then
+        TriggerServerEvent('inventory:giveItem', GetPlayerServerId(closestPlayer), data.slot)
+    else
+        print("Yakında kimse yok!")
+    end
+    cb('ok')
 end)
 
 
 for i = 1, 5 do
     RegisterKeyMapping('slot_'..i, 'Slot '..i, 'keyboard', tostring(i))
     RegisterCommand('slot_'..i, function()
-        TriggerServerEvent('inventory:useHotkey', i)
+        if not isInventoryOpen then 
+            TriggerServerEvent('inventory:useHotkey', i)
+        end
     end)
 end
 
-RegisterCommand('su-al', function()
-    local itemName = "su"
-    local count = 1
-    TriggerServerEvent('inventory:addItem', itemName, count)
-end)
 
+function GetClosestPlayer()
+    local players = GetActivePlayers()
+    local closestDistance = -1
+    local closestPlayer = -1
+    local ply = PlayerPedId()
+    local plyCoords = GetEntityCoords(ply, 0)
 
-RegisterNetEvent('envanter:efektTetikle')
-AddEventHandler('envanter:efektTetikle', function(itemName)
-    local playerPed = PlayerPedId()
-
-    if itemName == "bandaj" then
-        
-        TaskStartScenarioInPlace(playerPed, "WORLD_HUMAN_MEDIC_TEND_TO_KNOT", 0, true)
-        
-      
-        Citizen.SetTimeout(5000, function()
-            ClearPedTasks(playerPed)
-            local currentHealth = GetEntityHealth(playerPed)
-            SetEntityHealth(playerPed, currentHealth + 20)
-            print("Bandaj kullandın, canın yenilendi.")
-        end)
-        
-    elseif itemName == "ekmek" then
-        
-        print("Yemek yedin, açlığın azaldı.")
-       
+    for i=1, #players, 1 do
+        local target = GetPlayerPed(players[i])
+        if target ~= ply then
+            local targetCoords = GetEntityCoords(target, 0)
+            local distance = #(targetCoords - plyCoords)
+            if closestDistance == -1 or closestDistance > distance then
+                closestPlayer = players[i]
+                closestDistance = distance
+            end
+        end
     end
-end)
+    return closestPlayer, closestDistance
+end
