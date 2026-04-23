@@ -1,5 +1,35 @@
 local userInventories = {} 
 local OX = exports.oxmysql
+local MAX_WEIGHT = 100.0
+
+
+RegisterNetEvent('inventory:moveItem')
+AddEventHandler('inventory:moveItem', function(data)
+    local src = source
+    local identifier = GetPlayerIdentifiers(src)[1]
+    
+   
+    exports.oxmysql:execute('UPDATE user_inventory SET slot = ? WHERE identifier = ? AND slot = ?', 
+    {data.to, identifier, data.from})
+end)
+
+
+RegisterNetEvent('inventory:useHotkey')
+AddEventHandler('inventory:useHotkey', function(slotId)
+    local src = source
+    local identifier = GetPlayerIdentifiers(src)[1]
+
+    exports.oxmysql:query('SELECT item_name FROM user_inventory WHERE identifier = ? AND slot = ?', {identifier, slotId}, function(result)
+        if result[1] then
+            local itemName = result[1].item_name
+            if string.find(itemName, "WEAPON_") then
+                TriggerClientEvent('inventory:toggleWeapon', src, itemName)
+            else
+                TriggerClientEvent('envanter:efektTetikle', src, itemName)
+            end
+        end
+    end)
+end)
 
 
 RegisterNetEvent('envanter:esyaEkle')
